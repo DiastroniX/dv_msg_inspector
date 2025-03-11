@@ -307,14 +307,37 @@ async def apply_penalties_if_needed(
             await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
     elif penalty_to_apply == "read-only":
         until_date = int(time.time()) + config.mute_duration_seconds
+        if config.logging.enabled and config.logging.modules.handlers:
+            logger.info(f"Попытка установить мут пользователю {user_id} в группе {group_id} до {datetime.datetime.fromtimestamp(until_date)}")
+        
         try:
+            # Проверяем права бота
+            bot_member = await bot.get_chat_member(group_id, (await bot.me()).id)
+            if not bot_member.can_restrict_members:
+                if config.logging.enabled and config.logging.modules.handlers:
+                    logger.error(f"Бот не имеет прав для ограничения пользователей в группе {group_id}")
+                return
+            
             await bot.restrict_chat_member(
                 group_id,
                 user_id,
-                permissions=ChatPermissions(can_send_messages=False),
+                permissions=ChatPermissions(
+                    can_send_messages=False,
+                    can_send_media_messages=False,
+                    can_send_polls=False,
+                    can_send_other_messages=False,
+                    can_add_web_page_previews=False,
+                    can_invite_users=True,
+                    can_change_info=False,
+                    can_pin_messages=False
+                ),
                 until_date=until_date
             )
-        except Exception:
+            if config.logging.enabled and config.logging.modules.handlers:
+                logger.info(f"Мут успешно установлен пользователю {user_id}")
+        except Exception as e:
+            if config.logging.enabled and config.logging.modules.handlers:
+                logger.error(f"Ошибка при установке мута для пользователя {user_id}: {str(e)}")
             pass
         if config.notifications.get("mute_applied"):
             msk = pytz.timezone("Europe/Moscow")
