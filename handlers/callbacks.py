@@ -1,6 +1,6 @@
 from aiogram import Router, types, Bot
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from database import (
+from db.operations import (
     revoke_penalty,
     get_deleted_message_by_id,
     reset_all_user_data

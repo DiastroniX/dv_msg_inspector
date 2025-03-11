@@ -4,6 +4,25 @@ from typing import Dict, List
 
 
 @dataclass
+class LoggingModules:
+    bot: bool
+    handlers: bool
+    database: bool
+    admin: bool
+
+
+@dataclass
+class LoggingConfig:
+    enabled: bool
+    level: str
+    modules: LoggingModules
+    message_deletion: bool
+    violations: bool
+    penalties: bool
+    config: bool
+
+
+@dataclass
 class ViolationRule:
     enabled: bool  # Включено ли правило
     count_as_violation: bool  # Считать ли как нарушение
@@ -35,9 +54,14 @@ class Config:
     # Настройки сообщений бота
     delete_bot_messages: bool  # Удалять ли сообщения бота в группе
     bot_message_lifetime_seconds: int  # Через сколько секунд удалять сообщения бота
+    delete_penalty_messages: bool  # Удалять ли сообщения о наказаниях
+    penalty_message_lifetime_seconds: int  # Через сколько секунд удалять сообщения о наказаниях
 
     # Настройки хранения данных
     data_retention_days: int  # Сколько дней хранить историю нарушений
+
+    # Настройки логирования
+    logging: LoggingConfig
 
     @staticmethod
     def from_json_file(path: str) -> "Config":
@@ -61,25 +85,47 @@ class Config:
                 "self_reply": ViolationRule(enabled=True, count_as_violation=True, violations_before_penalty=1)
             }
 
+        # Настройки логирования
+        logging_data = data.get("logging", {})
+        modules_data = logging_data.get("modules", {})
+        logging_config = LoggingConfig(
+            enabled=logging_data.get("enabled", True),
+            level=logging_data.get("level", "INFO"),
+            modules=LoggingModules(
+                bot=modules_data.get("bot", True),
+                handlers=modules_data.get("handlers", True),
+                database=modules_data.get("database", True),
+                admin=modules_data.get("admin", True)
+            ),
+            message_deletion=logging_data.get("message_deletion", True),
+            violations=logging_data.get("violations", True),
+            penalties=logging_data.get("penalties", True),
+            config=logging_data.get("config", True)
+        )
+
         return Config(
             bot_token=data["bot_token"],
             allowed_groups=data["allowed_groups"],
             admin_ids=data["admin_ids"],
             admin_chat_id=data["admin_chat_id"],
 
-            message_length_limit=data.get("long_message_threshold", 500),
-            reply_cooldown_seconds=data.get("reply_rules_time_window", 10),
-            ignore_bot_thread_replies=data.get("ignore_bot_replies_in_thread", True),
+            message_length_limit=data.get("message_length_limit", 500),
+            reply_cooldown_seconds=data.get("reply_cooldown_seconds", 10),
+            ignore_bot_thread_replies=data.get("ignore_bot_thread_replies", True),
 
             violation_rules=violation_rules,
 
             penalties=data["penalties"],
             notifications=data["notifications"],
-            mute_duration_seconds=data.get("read_only_duration", 3600),
-            temp_ban_duration_seconds=data.get("kick_ban_duration", 86400),
+            mute_duration_seconds=data.get("mute_duration_seconds", 3600),
+            temp_ban_duration_seconds=data.get("temp_ban_duration_seconds", 86400),
 
-            delete_bot_messages=data.get("bot_deletes_own_messages_in_group", False),
-            bot_message_lifetime_seconds=data.get("delete_own_messages_after_secs", 0),
+            delete_bot_messages=data.get("delete_bot_messages", False),
+            bot_message_lifetime_seconds=data.get("bot_message_lifetime_seconds", 0),
+            delete_penalty_messages=data.get("delete_penalty_messages", False),
+            penalty_message_lifetime_seconds=data.get("penalty_message_lifetime_seconds", 300),
             
-            data_retention_days=data.get("data_retention_days", 360)  # По умолчанию 360 дней
+            data_retention_days=data.get("data_retention_days", 360),
+            
+            logging=logging_config
         )

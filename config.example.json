@@ -47,6 +47,8 @@
 
   "delete_bot_messages": true,
   "bot_message_lifetime_seconds": 30,
+  "delete_penalty_messages": false,
+  "penalty_message_lifetime_seconds": 300,
 
   "data_retention_days": 360
 } 
