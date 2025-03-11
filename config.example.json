@@ -50,5 +50,20 @@
   "delete_penalty_messages": false,
   "penalty_message_lifetime_seconds": 300,
 
-  "data_retention_days": 360
+  "data_retention_days": 360,
+
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "modules": {
+      "bot": true,
+      "handlers": true,
+      "database": true,
+      "admin": true
+    },
+    "message_deletion": true,
+    "violations": true,
+    "penalties": true,
+    "config": true
+  }
 } 

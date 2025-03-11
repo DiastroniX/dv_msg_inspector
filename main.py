@@ -9,6 +9,7 @@ from aiogram.types import TelegramObject
 
 from config import Config
 from handlers.message_handlers import message_router, init_message_handler
+from handlers.callbacks import callbacks_router
 from db.operations import init_db, cleanup_old_violations
 
 def setup_logging(config: Config):
@@ -96,8 +97,9 @@ async def main():
 
     # Регистрируем обработчики
     dp.include_router(message_router)
+    dp.include_router(callbacks_router)
     await init_message_handler()
-    logger.info("Обработчики сообщений зарегистрированы")
+    logger.info("Обработчики сообщений и callback-запросов зарегистрированы")
 
     # Запускаем задачу очистки старых нарушений
     asyncio.create_task(cleanup_old_violations(config))
