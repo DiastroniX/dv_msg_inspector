@@ -164,7 +164,7 @@ async def _handle_restore_message(call: CallbackQuery, bot: Bot, config):
     # Конвертируем timestamp в московское время
     msk_tz = pytz.timezone('Europe/Moscow')
     dt = datetime.datetime.fromtimestamp(timestamp, msk_tz)
-    formatted_date = dt.strftime("%d/%m/%y %H:%M")
+    formatted_date = dt.strftime("%d.%m.%Y %H:%M")
 
     text_to_post = TEXTS["message_restored"].format(
         user_name=usr_name,

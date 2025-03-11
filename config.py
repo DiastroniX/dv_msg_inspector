@@ -56,6 +56,7 @@ class Config:
     bot_message_lifetime_seconds: int  # Через сколько секунд удалять сообщения бота
     delete_penalty_messages: bool  # Удалять ли сообщения о наказаниях
     penalty_message_lifetime_seconds: int  # Через сколько секунд удалять сообщения о наказаниях
+    bot_message_delay_seconds: int  # Задержка перед отправкой сообщений бота
 
     # Настройки хранения данных
     data_retention_days: int  # Сколько дней хранить историю нарушений
@@ -124,6 +125,7 @@ class Config:
             bot_message_lifetime_seconds=data.get("bot_message_lifetime_seconds", 0),
             delete_penalty_messages=data.get("delete_penalty_messages", False),
             penalty_message_lifetime_seconds=data.get("penalty_message_lifetime_seconds", 300),
+            bot_message_delay_seconds=data.get("bot_message_delay_seconds", 2),
             
             data_retention_days=data.get("data_retention_days", 360),
             

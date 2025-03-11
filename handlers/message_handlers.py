@@ -318,17 +318,20 @@ async def apply_penalties_if_needed(
             pass
         if config.notifications.get("mute_applied"):
             msk = pytz.timezone("Europe/Moscow")
-            msk_time = datetime.datetime.fromtimestamp(until_date, msk).strftime("%Y-%m-%d %H:%M:%S MSK")
+            msk_time = datetime.datetime.fromtimestamp(until_date, msk).strftime("%d.%m.%Y %H:%M")
             minutes = max(1, (config.mute_duration_seconds + 59) // 60)  # округление вверх
             
             # Получаем описание нарушения
             violation_desc = VIOLATION_DESCRIPTIONS.get(violation_type, violation_type)
             
-            txt = (
-                f"{TEXTS['mute_applied'].format(name=user_name, minutes=minutes)}\n"
-                f"{TEXTS['mute_until_time'].format(name=user_name, until_time=msk_time)}\n"
-                f"Причина: {violation_desc}\n"
-                f"Текст сообщения: <code>{msg_text}</code>"
+            # Добавляем задержку перед отправкой сообщения
+            await asyncio.sleep(config.bot_message_delay_seconds)
+            
+            txt = TEXTS["mute_applied"].format(
+                name=user_name,
+                violations_count=count_incidents,
+                minutes=minutes,
+                datetime=msk_time
             )
             sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
             if sent_msg and config.delete_penalty_messages:  # Используем delete_penalty_messages для мута
@@ -351,7 +354,7 @@ async def apply_penalties_if_needed(
         except Exception:
             pass
         msk = pytz.timezone("Europe/Moscow")
-        date_str = datetime.datetime.fromtimestamp(ban_until, msk).strftime("%Y-%m-%d %H:%M:%S MSK")
+        date_str = datetime.datetime.fromtimestamp(ban_until, msk).strftime("%d.%m.%Y %H:%M")
         minutes = max(1, (config.temp_ban_duration_seconds + 59) // 60)  # округление вверх
         txt = TEXTS["kick_ban_applied"].format(name=user_name, date_str=date_str, minutes=minutes)
         sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
