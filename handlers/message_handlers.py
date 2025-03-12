@@ -125,6 +125,14 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
     if user.is_bot or message.sender_chat:
         return
 
+    # Игнорируем служебные сообщения (вход/выход из группы и т.д.)
+    if message.new_chat_members is not None or message.left_chat_member is not None:
+        return
+    if message.new_chat_title or message.new_chat_photo or message.delete_chat_photo or message.group_chat_created:
+        return
+    if message.message_auto_delete_timer_changed or message.pinned_message:
+        return
+
     user_id = user.id
     user_name = f"@{user.username}" if user.username else user.full_name
 
