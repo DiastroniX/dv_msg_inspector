@@ -117,8 +117,18 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
     if not user:
         return
 
-    # Игнорируем сообщения в админ-чате
-    if chat_id == config.admin_chat_id:
+    # Игнорируем сообщения в админ-чате и его тредах
+    main_chat_id = message.chat.id
+    if hasattr(message, 'message_thread_id'):
+        # Если это тред, получаем ID основного чата
+        try:
+            chat = await bot.get_chat(message.chat.id)
+            if hasattr(chat, 'linked_chat_id') and chat.linked_chat_id:
+                main_chat_id = chat.linked_chat_id
+        except Exception as e:
+            logger.error(f"Ошибка при получении основного чата для треда: {str(e)}")
+
+    if main_chat_id == config.admin_chat_id:
         return
 
     # Проверяем, что группа входит в список разрешённых
