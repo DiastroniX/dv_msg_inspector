@@ -89,7 +89,7 @@
   "bot_token": "YOUR_BOT_TOKEN",
   "allowed_groups": [-100123456789],
   "admin_ids": [123456789],
-  "admin_chat_id": -100987654321,
+  "admin_chat_id": "-1002465953388_128",
 
   "message_length_limit": 500,
   "reply_cooldown_seconds": 5,
