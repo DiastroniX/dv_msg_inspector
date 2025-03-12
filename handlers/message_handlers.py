@@ -117,6 +117,10 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
     if not user:
         return
 
+    # Игнорируем сообщения в админ-чате
+    if chat_id == config.admin_chat_id:
+        return
+
     # Проверяем, что группа входит в список разрешённых
     if chat_id not in config.allowed_groups:
         return
