@@ -3,7 +3,7 @@ import asyncio
 import datetime
 import pytz
 import logging
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any, List
 from collections import defaultdict
 
 from aiogram import Router, F, Bot
@@ -33,38 +33,33 @@ logging.basicConfig(
 
 message_router = Router(name="message_router")
 
-# Кэш для хранения информации о последнем реплае: user_id -> (last_reply_msg_id, timestamp)
-# Если значение -1, значит последнее сообщение было без реплая.
-last_reply_info: Dict[int, Tuple[int, float]] = {}
+# Кэш для хранения информации о последних сообщениях пользователя
+# user_id -> List[Tuple[message_id, reply_to_message_id, timestamp]]
+user_messages: Dict[int, List[Tuple[int, Optional[int], float]]] = defaultdict(list)
 
-# Хранилище активных задач удаления
-_deletion_tasks = {}
-
-# Время жизни записи в кэше (30 минут)
-CACHE_TTL = 1800
+# Время жизни записи в кэше (60 минут)
+CACHE_TTL = 3600
 
 logger = logging.getLogger(__name__)
 
 async def cleanup_old_cache_entries():
-    """
-    Периодически очищает старые записи из кэша last_reply_info
-    """
+    """Периодически очищает старые записи из кэша user_messages"""
     while True:
         try:
             current_time = time.time()
-            to_remove = []
-            
-            for user_id, (msg_id, timestamp) in last_reply_info.items():
-                if current_time - timestamp > CACHE_TTL:
-                    to_remove.append(user_id)
-            
-            for user_id in to_remove:
-                del last_reply_info[user_id]
-                
+            for user_id in list(user_messages.keys()):
+                # Удаляем сообщения старше CACHE_TTL
+                user_messages[user_id] = [
+                    msg for msg in user_messages[user_id]
+                    if current_time - msg[2] <= CACHE_TTL
+                ]
+                # Если список пуст, удаляем запись пользователя
+                if not user_messages[user_id]:
+                    del user_messages[user_id]
             await asyncio.sleep(300)  # Проверяем каждые 5 минут
         except Exception as e:
             logging.error(f"Error in cache cleanup: {str(e)}", exc_info=True)
-            await asyncio.sleep(60)  # В случае ошибки, подождем минуту
+            await asyncio.sleep(60)
 
 async def init_message_handler():
     """
@@ -145,64 +140,61 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
 
     # Если сообщение длинное — пропускаем проверки
     if text_len >= config.message_length_limit:
-        if message.reply_to_message:
-            if not (message.reply_to_message.from_user and
-                    message.reply_to_message.from_user.is_bot and
-                    config.ignore_bot_thread_replies):
-                last_reply_info[user_id] = (message.reply_to_message.message_id, now_ts)
-        else:
-            last_reply_info[user_id] = (-1, now_ts)
-        return  # Длинное сообщение не считается нарушением
+        return
 
+    # Получаем ID сообщения, на которое отвечают (если есть)
+    reply_to_msg_id = message.reply_to_message.message_id if message.reply_to_message else None
+    
+    # Добавляем текущее сообщение в историю
+    user_messages[user_id].append((message.message_id, reply_to_msg_id, now_ts))
+    
+    # Сортируем сообщения по времени
+    user_messages[user_id].sort(key=lambda x: x[2])
+    
     violation_type = None
     delete_msg = False
 
-    if message.reply_to_message:
-        if (message.reply_to_message.from_user and
-                message.reply_to_message.from_user.is_bot and
-                config.ignore_bot_thread_replies):
-            pass
+    # Получаем предыдущее сообщение пользователя
+    prev_messages = [msg for msg in user_messages[user_id][:-1] if now_ts - msg[2] <= CACHE_TTL]
+    
+    if prev_messages:
+        prev_msg = prev_messages[-1]
+        prev_msg_id, prev_reply_id, prev_ts = prev_msg
+
+        # Проверяем временной интервал только если включена соответствующая опция
+        time_violation = False
+        if config.check_reply_cooldown and config.reply_cooldown_seconds:
+            time_violation = (now_ts - prev_ts) < config.reply_cooldown_seconds
+
+        if reply_to_msg_id:
+            if message.reply_to_message.from_user:
+                # Self-reply: реплай на своё сообщение
+                if message.reply_to_message.from_user.id == user_id:
+                    if time_violation:
+                        violation_type = "self_reply"
+                        delete_msg = not is_admin_user
+                # Double-reply: повторный ответ на то же сообщение
+                elif prev_reply_id == reply_to_msg_id and time_violation:
+                    violation_type = "double_reply"
+                    delete_msg = not is_admin_user
         else:
-            replied_msg_id = message.reply_to_message.message_id
-            # Если self-reply: реплай на своё же сообщение
-            if message.reply_to_message.from_user and message.reply_to_message.from_user.id == user_id:
-                if (now_ts - message.reply_to_message.date.timestamp()) < config.reply_cooldown_seconds:
-                    violation_type = "self_reply"
-                    delete_msg = not is_admin_user  # Не удаляем сообщения администраторов
-            else:
-                # Реплай на чужое сообщение
-                if user_id in last_reply_info:
-                    prev_msg_id, prev_ts = last_reply_info[user_id]
-                    if prev_msg_id == replied_msg_id and (now_ts - prev_ts) < config.reply_cooldown_seconds:
-                        violation_type = "double_reply"
-                        delete_msg = not is_admin_user  # Не удаляем сообщения администраторов
-                    else:
-                        last_reply_info[user_id] = (replied_msg_id, now_ts)
-                else:
-                    last_reply_info[user_id] = (replied_msg_id, now_ts)
-    else:
-        # Сообщение без реплая
-        if user_id in last_reply_info:
-            prev_msg_id, prev_ts = last_reply_info[user_id]
-            if prev_msg_id == -1 and (now_ts - prev_ts) < config.reply_cooldown_seconds:
+            # No-reply: сообщение без реплая после предыдущего без реплая
+            if not prev_reply_id and time_violation:
                 violation_type = "no_reply"
-                delete_msg = not is_admin_user  # Не удаляем сообщения администраторов
-            else:
-                last_reply_info[user_id] = (-1, now_ts)
-        else:
-            last_reply_info[user_id] = (-1, now_ts)
+                delete_msg = not is_admin_user
 
     if violation_type:
         try:
             if is_admin_user:
-                # Отправляем предупреждение в админ-чат
-                violation_desc = VIOLATION_DESCRIPTIONS.get(violation_type, violation_type)
-                warning_text = ADMIN_VIOLATION_WARNING.format(
-                    user_name=user_name,
-                    violation_desc=violation_desc,
-                    msg_text=text
-                )
-                await bot.send_message(config.admin_chat_id, warning_text, parse_mode="HTML")
+                if config.warn_admins:
+                    # Отправляем предупреждение в админ-чат
+                    violation_desc = VIOLATION_DESCRIPTIONS.get(violation_type, violation_type)
+                    warning_text = ADMIN_VIOLATION_WARNING.format(
+                        user_name=user_name,
+                        violation_desc=violation_desc,
+                        msg_text=text
+                    )
+                    await bot.send_message(config.admin_chat_id, warning_text, parse_mode="HTML")
             else:
                 if delete_msg:
                     # Сначала пытаемся удалить сообщение
@@ -224,10 +216,8 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
 
                 if notification_text:
                     sent_msg = await bot.send_message(chat_id, notification_text, parse_mode="HTML")
-                    if sent_msg and config.delete_bot_messages:  # Используем delete_bot_messages для уведомлений о нарушениях
-                        logging.info(f"Attempting to schedule deletion for notification message {sent_msg.message_id}")
-                        await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=False)  # Явно указываем, что это не сообщение о наказании
-                        logging.info(f"Deletion scheduled for notification message {sent_msg.message_id}")
+                    if sent_msg and config.delete_bot_messages:
+                        await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=False)
                 
                 # Проверяем необходимость применения санкций
                 await apply_penalties_if_needed(user_id, user_name, chat_id, config, violation_type, text, bot, deleted_msg_id)

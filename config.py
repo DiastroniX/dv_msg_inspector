@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -39,7 +39,9 @@ class Config:
 
     # Параметры проверки сообщений
     message_length_limit: int  # Максимальная длина сообщения для проверки правил
-    reply_cooldown_seconds: int  # Временное окно для проверки повторных реплаев
+    check_reply_cooldown: bool  # Включить/выключить проверку временного интервала
+    reply_cooldown_seconds: Optional[int]  # Временное окно для проверки повторных реплаев
+    warn_admins: bool  # Предупреждать ли администраторов о нарушениях без наказаний
     ignore_bot_thread_replies: bool  # Игнорировать ли реплаи на сообщения бота в тредах
 
     # Правила нарушений
@@ -111,7 +113,9 @@ class Config:
             admin_chat_id=data["admin_chat_id"],
 
             message_length_limit=data.get("message_length_limit", 500),
-            reply_cooldown_seconds=data.get("reply_cooldown_seconds", 10),
+            check_reply_cooldown=data.get("check_reply_cooldown", True),
+            reply_cooldown_seconds=data.get("reply_cooldown_seconds", 3600),
+            warn_admins=data.get("warn_admins", True),
             ignore_bot_thread_replies=data.get("ignore_bot_thread_replies", True),
 
             violation_rules=violation_rules,
