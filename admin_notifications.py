@@ -73,9 +73,22 @@ async def send_admin_notification(
     )
 
     kb = make_admin_inline_kb(user_id, deleted_msg_id)
+    
+    # Обработка составного ID чата и топика
+    chat_id = config.admin_chat_id
+    message_thread_id = None
+    
+    if '_' in str(chat_id):
+        chat_id, message_thread_id = str(chat_id).split('_')
+        chat_id = int(chat_id)
+        message_thread_id = int(message_thread_id)
+    else:
+        chat_id = int(chat_id)  # Преобразуем простой ID в число
+    
     await bot.send_message(
-        config.admin_chat_id,
-        text_report,
+        chat_id=chat_id,
+        text=text_report,
         parse_mode="HTML",
-        reply_markup=kb
+        reply_markup=kb,
+        message_thread_id=message_thread_id
     )

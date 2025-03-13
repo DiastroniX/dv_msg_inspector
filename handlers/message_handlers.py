@@ -128,7 +128,14 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
         except Exception as e:
             logger.error(f"Ошибка при получении основного чата для треда: {str(e)}")
 
-    if main_chat_id == config.admin_chat_id:
+    # Проверяем, является ли чат админ-чатом
+    admin_chat_id = config.admin_chat_id
+    if '_' in str(admin_chat_id):
+        admin_chat_id = int(str(admin_chat_id).split('_')[0])
+    else:
+        admin_chat_id = int(admin_chat_id)  # Преобразуем простой ID в число
+    
+    if main_chat_id == admin_chat_id:
         return
 
     # Проверяем, что группа входит в список разрешённых
@@ -216,7 +223,24 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
                         violation_desc=violation_desc,
                         msg_text=text
                     )
-                    await bot.send_message(config.admin_chat_id, warning_text, parse_mode="HTML")
+                    
+                    # Обработка составного ID чата и топика
+                    chat_id = config.admin_chat_id
+                    message_thread_id = None
+                    
+                    if '_' in str(chat_id):
+                        chat_id, message_thread_id = str(chat_id).split('_')
+                        chat_id = int(chat_id)
+                        message_thread_id = int(message_thread_id)
+                    else:
+                        chat_id = int(chat_id)  # Преобразуем простой ID в число
+                    
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=warning_text,
+                        parse_mode="HTML",
+                        message_thread_id=message_thread_id
+                    )
             else:
                 if delete_msg:
                     # Сначала пытаемся удалить сообщение

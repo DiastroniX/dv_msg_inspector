@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 
 @dataclass
@@ -35,7 +35,7 @@ class Config:
     bot_token: str
     allowed_groups: List[int]
     admin_ids: List[int]
-    admin_chat_id: int
+    admin_chat_id: str
 
     # Параметры проверки сообщений
     message_length_limit: int  # Максимальная длина сообщения для проверки правил
@@ -65,6 +65,14 @@ class Config:
 
     # Настройки логирования
     logging: LoggingConfig
+
+    def __init__(self, data: Dict[str, Any]):
+        self.bot_token = data["bot_token"]
+        self.allowed_groups = data["allowed_groups"]
+        self.admin_ids = data["admin_ids"]
+        self.admin_chat_id = str(data["admin_chat_id"])  # Храним как строку для поддержки составного ID
+
+        # Остальные параметры инициализируем через метод from_json_file
 
     @staticmethod
     def from_json_file(path: str) -> "Config":
@@ -110,7 +118,7 @@ class Config:
             bot_token=data["bot_token"],
             allowed_groups=data["allowed_groups"],
             admin_ids=data["admin_ids"],
-            admin_chat_id=data["admin_chat_id"],
+            admin_chat_id=str(data["admin_chat_id"]),
 
             message_length_limit=data.get("message_length_limit", 500),
             check_reply_cooldown=data.get("check_reply_cooldown", True),
