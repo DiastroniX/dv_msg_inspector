@@ -323,9 +323,9 @@ async def apply_penalties_if_needed(
         # Преобразуем тип наказания в понятное описание
         penalty_descriptions = {
             "warning": "предупреждение",
-            "read-only": f"временный мут на {max(1, config.mute_duration_seconds // 60)} минут",
+            "read-only": f"временный режим read-only на {max(1, config.mute_duration_seconds // 60)} мин.",
             "kick": "исключение из группы",
-            "kick+ban": f"бан на {config.temp_ban_duration_seconds // 60} минут",
+            "kick+ban": f"бан на {config.temp_ban_duration_seconds // 60} мин.",
             "ban": "перманентный бан"
         }
         
