@@ -1,5 +1,5 @@
 # Main dependencies
-aiogram==3.3.0
+aiogram==3.18.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
 python-dotenv==1.0.1
