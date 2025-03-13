@@ -66,13 +66,9 @@ class Config:
     # Настройки логирования
     logging: LoggingConfig
 
-    def __init__(self, data: Dict[str, Any]):
-        self.bot_token = data["bot_token"]
-        self.allowed_groups = data["allowed_groups"]
-        self.admin_ids = data["admin_ids"]
-        self.admin_chat_id = str(data["admin_chat_id"])  # Храним как строку для поддержки составного ID
-
-        # Остальные параметры инициализируем через метод from_json_file
+    def __post_init__(self):
+        """Преобразуем admin_chat_id в строку после инициализации"""
+        self.admin_chat_id = str(self.admin_chat_id)
 
     @staticmethod
     def from_json_file(path: str) -> "Config":
