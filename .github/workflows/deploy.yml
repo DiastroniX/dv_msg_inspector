@@ -1,8 +1,8 @@
 name: Deploy to Server
 
 on:
-  push:
-    branches: [ main ]
+  release:
+    types: [published]
 
 jobs:
   deploy:
@@ -28,7 +28,7 @@ jobs:
         username: ${{ secrets.SERVER_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
-          cd /home/dv_msg_inspector
+          cd /path/to/your/project
           git pull origin main
           source .venv/bin/activate
           pip install -r requirements.txt
