@@ -28,8 +28,8 @@ jobs:
         username: ${{ secrets.SERVER_USERNAME }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
-          cd /path/to/your/project
+          cd /home/dv_msg_inspector
           git pull origin main
-          source .venv/bin/activate
+          source venv/bin/activate
           pip install -r requirements.txt
           systemctl restart dv_msg_inspector 
