@@ -53,6 +53,9 @@ class Config:
     mute_duration_seconds: int  # Длительность мута в секундах
     temp_ban_duration_seconds: int  # Длительность временного бана в секундах
 
+    # Настройки функций
+    features: Dict[str, bool]  # Включение/выключение функций (violation_counter, penalties)
+
     # Настройки сообщений бота
     delete_bot_messages: bool  # Удалять ли сообщения бота в группе
     bot_message_lifetime_seconds: int  # Через сколько секунд удалять сообщения бота
@@ -128,6 +131,8 @@ class Config:
             notifications=data["notifications"],
             mute_duration_seconds=data.get("mute_duration_seconds", 3600),
             temp_ban_duration_seconds=data.get("temp_ban_duration_seconds", 86400),
+
+            features=data.get("features", {}),
 
             delete_bot_messages=data.get("delete_bot_messages", False),
             bot_message_lifetime_seconds=data.get("bot_message_lifetime_seconds", 0),

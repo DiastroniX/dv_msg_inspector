@@ -281,110 +281,84 @@ async def apply_penalties_if_needed(
     bot: Bot,
     deleted_msg_id: int = None
 ):
-    count_incidents = await get_incidents_count(user_id)
-    penalty_count = count_incidents  # для отображения номера наказания
+    # Проверяем, включены ли наказания
+    if not config.features.get("penalties", True):
+        return
 
-    best_key = 0
+    count_incidents = await get_incidents_count(user_id)
+
+    # Проверяем, нужно ли отправлять уведомление о нарушении
+    if config.notifications.get("violation_rules", True):
+        violation_desc = VIOLATION_DESCRIPTIONS.get(violation_type, violation_type)
+        
+        # Добавляем задержку перед отправкой сообщения
+        await asyncio.sleep(config.bot_message_delay_seconds)
+        
+        if violation_type == "no_reply":
+            notification_text = TEXTS["no_reply"].format(name=user_name)
+        elif violation_type == "double_reply":
+            notification_text = TEXTS["double_reply"].format(name=user_name)
+        elif violation_type == "self_reply":
+            minutes = max(1, (config.reply_cooldown_seconds + 59) // 60)
+            notification_text = TEXTS["self_reply"].format(name=user_name, minutes=minutes)
+            
+        if notification_text:
+            sent_msg = await bot.send_message(group_id, notification_text, parse_mode="HTML")
+            if sent_msg and config.delete_bot_messages:
+                await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=False)
+
+    # Проверяем, включены ли наказания
+    if not config.features.get("penalties", True):
+        return
+
+    # Определяем наказание на основе количества нарушений
     penalty_to_apply = None
-    for k_str, p_type in config.penalties.items():
-        k = int(k_str)
-        if count_incidents >= k and k > best_key:
-            best_key = k
-            penalty_to_apply = p_type
+    for violations_threshold, penalty in sorted(config.penalties.items(), key=lambda x: int(x[0])):
+        if count_incidents >= int(violations_threshold):
+            penalty_to_apply = penalty
 
     if not penalty_to_apply:
         return
 
-    # Отправка уведомления в админ-чат
-    await send_admin_notification(
-        bot,
-        config,
-        user_id,
-        user_name,
-        violation_type,
-        penalty_to_apply,
-        msg_text,
-        penalty_count,
-        deleted_msg_id=deleted_msg_id
-    )
+    # Применяем наказание
+    if penalty_to_apply == "warning" and config.notifications.get("official_warning", True):
+        # Отправляем официальное предупреждение
+        next_threshold = None
+        next_penalty = None
+        for threshold, penalty in sorted(config.penalties.items(), key=lambda x: int(x[0])):
+            if int(threshold) > count_incidents:
+                next_threshold = int(threshold)
+                next_penalty = penalty
+                break
 
-    if penalty_to_apply == "warning":
-        # Находим следующее наказание
-        next_penalty_threshold = float('inf')
-        next_penalty_type = None
-        current_violations = count_incidents
-        
-        for k_str, p_type in config.penalties.items():
-            k = int(k_str)
-            if k > current_violations and k < next_penalty_threshold:
-                next_penalty_threshold = k
-                next_penalty_type = p_type
-        
-        # Преобразуем тип наказания в понятное описание
-        penalty_descriptions = {
-            "warning": "предупреждение",
-            "read-only": f"временный режим read-only на {max(1, config.mute_duration_seconds // 60)} мин.",
-            "kick": "исключение из группы",
-            "kick+ban": f"бан на {config.temp_ban_duration_seconds // 60} мин.",
-            "ban": "перманентный бан"
-        }
-        
-        next_penalty_description = penalty_descriptions.get(next_penalty_type, "неизвестно")
-        violations_until_next = next_penalty_threshold - current_violations if next_penalty_type else 0
-        
-        warn_text = TEXTS["official_warning"].format(
-            name=user_name,
-            current_violations=current_violations,
-            next_penalty_description=next_penalty_description,
-            violations_until_next=violations_until_next
-        )
-        sent_msg = await bot.send_message(group_id, warn_text, parse_mode="HTML")
-        if sent_msg and config.delete_penalty_messages:  # Используем delete_penalty_messages для предупреждений
-            await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
+        if next_threshold and next_penalty:
+            violations_until_next = next_threshold - count_incidents
+            txt = TEXTS["official_warning"].format(
+                name=user_name,
+                current_violations=count_incidents,
+                next_penalty_description=next_penalty,
+                violations_until_next=violations_until_next
+            )
+            sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
+            if sent_msg and config.delete_penalty_messages:
+                await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
+
     elif penalty_to_apply == "read-only":
-        until_date = int(time.time()) + config.mute_duration_seconds
-        if config.logging.enabled and config.logging.modules.handlers:
-            logger.info(f"Попытка установить мут пользователю {user_id} в группе {group_id} до {datetime.datetime.fromtimestamp(until_date)}")
-        
         try:
-            # Проверяем права бота
-            bot_member = await bot.get_chat_member(group_id, (await bot.me()).id)
-            if not bot_member.can_restrict_members:
-                if config.logging.enabled and config.logging.modules.handlers:
-                    logger.error(f"Бот не имеет прав для ограничения пользователей в группе {group_id}")
-                return
-            
+            until_date = int(time.time()) + config.mute_duration_seconds
             await bot.restrict_chat_member(
-                group_id,
-                user_id,
-                permissions=ChatPermissions(
-                    can_send_messages=False,
-                    can_send_media_messages=False,
-                    can_send_polls=False,
-                    can_send_other_messages=False,
-                    can_add_web_page_previews=False,
-                    can_invite_users=True,
-                    can_change_info=False,
-                    can_pin_messages=False
-                ),
+                chat_id=group_id,
+                user_id=user_id,
+                permissions=ChatPermissions(can_send_messages=False),
                 until_date=until_date
             )
-            if config.logging.enabled and config.logging.modules.handlers:
-                logger.info(f"Мут успешно установлен пользователю {user_id}")
-        except Exception as e:
-            if config.logging.enabled and config.logging.modules.handlers:
-                logger.error(f"Ошибка при установке мута для пользователя {user_id}: {str(e)}")
+        except Exception:
             pass
-        if config.notifications.get("mute_applied"):
+
+        if config.notifications.get("mute_applied", True):
             msk = pytz.timezone("Europe/Moscow")
             msk_time = datetime.datetime.fromtimestamp(until_date, msk).strftime("%d.%m.%Y %H:%M")
-            minutes = max(1, (config.mute_duration_seconds + 59) // 60)  # округление вверх
-            
-            # Получаем описание нарушения
-            violation_desc = VIOLATION_DESCRIPTIONS.get(violation_type, violation_type)
-            
-            # Добавляем задержку перед отправкой сообщения
-            await asyncio.sleep(config.bot_message_delay_seconds)
+            minutes = max(1, (config.mute_duration_seconds + 59) // 60)
             
             txt = TEXTS["mute_applied"].format(
                 name=user_name,
@@ -393,41 +367,54 @@ async def apply_penalties_if_needed(
                 datetime=msk_time
             )
             sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
-            if sent_msg and config.delete_penalty_messages:  # Используем delete_penalty_messages для мута
+            if sent_msg and config.delete_penalty_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
+
     elif penalty_to_apply == "kick":
         try:
             await bot.ban_chat_member(group_id, user_id, until_date=int(time.time()) + 60)
             await bot.unban_chat_member(group_id, user_id)
         except Exception:
             pass
-        if config.notifications.get("kick_applied"):
-            txt = TEXTS["kick_applied"].format(name=user_name)
+
+        if config.notifications.get("kick_applied", True):
+            txt = TEXTS["kick_applied"].format(name=user_name, violations_count=count_incidents)
             sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
-            if sent_msg and config.delete_penalty_messages:  # Используем delete_penalty_messages для кика
+            if sent_msg and config.delete_penalty_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
+
     elif penalty_to_apply == "kick+ban":
-        ban_until = int(time.time()) + config.temp_ban_duration_seconds
         try:
-            await bot.ban_chat_member(group_id, user_id, until_date=ban_until)
+            until_date = int(time.time()) + config.temp_ban_duration_seconds
+            await bot.ban_chat_member(group_id, user_id, until_date=until_date)
         except Exception:
             pass
-        msk = pytz.timezone("Europe/Moscow")
-        date_str = datetime.datetime.fromtimestamp(ban_until, msk).strftime("%d.%m.%Y %H:%M")
-        minutes = max(1, (config.temp_ban_duration_seconds + 59) // 60)  # округление вверх
-        txt = TEXTS["kick_ban_applied"].format(name=user_name, date_str=date_str, minutes=minutes)
-        sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
-        if sent_msg and config.delete_penalty_messages:  # Используем delete_penalty_messages для временного бана
-            await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
+
+        if config.notifications.get("kick_ban_applied", True):
+            msk = pytz.timezone("Europe/Moscow")
+            msk_time = datetime.datetime.fromtimestamp(until_date, msk).strftime("%d.%m.%Y %H:%M")
+            minutes = max(1, (config.temp_ban_duration_seconds + 59) // 60)
+            
+            txt = TEXTS["kick_ban_applied"].format(
+                name=user_name,
+                violations_count=count_incidents,
+                minutes=minutes,
+                date_str=msk_time
+            )
+            sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
+            if sent_msg and config.delete_penalty_messages:
+                await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
+
     elif penalty_to_apply == "ban":
         try:
             await bot.ban_chat_member(group_id, user_id)
         except Exception:
             pass
-        if config.notifications.get("ban_applied"):
-            txt = TEXTS["ban_applied"].format(name=user_name)
+
+        if config.notifications.get("ban_applied", True):
+            txt = TEXTS["ban_applied"].format(name=user_name, violations_count=count_incidents)
             sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
-            if sent_msg and config.delete_penalty_messages:  # Используем delete_penalty_messages для бана
+            if sent_msg and config.delete_penalty_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
 
 async def process_violation(
@@ -458,6 +445,12 @@ async def process_violation(
             logger.error(f"Ошибка при удалении сообщения: {str(e)}")
         return
 
+    # Проверяем, включен ли счетчик нарушений
+    if not config.features.get("violation_counter", True):
+        if config.logging.violations:
+            logger.debug("Счетчик нарушений отключен")
+        return
+
     # Добавляем нарушение в базу
     violation = await add_violation(
         user_id=message.from_user.id,
@@ -469,6 +462,12 @@ async def process_violation(
 
     if config.logging.violations:
         logger.info(f"Добавлено нарушение {violation.id} для пользователя {message.from_user.id}")
+
+    # Проверяем, включены ли наказания
+    if not config.features.get("penalties", True):
+        if config.logging.violations:
+            logger.debug("Система наказаний отключена")
+        return
 
     # Получаем количество активных нарушений
     violations_count = await get_user_violations_count(message.from_user.id, message.chat.id)

@@ -41,10 +41,17 @@
   },
 
   "notifications": {
-    "new_violation": true,
-    "mute_applied": true,
-    "kick_applied": true,
-    "ban_applied": true
+    "violation_rules": false,
+    "mute_applied": false,
+    "kick_applied": false,
+    "kick_ban_applied": false,
+    "ban_applied": false,
+    "official_warning": false
+  },
+
+  "features": {
+    "violation_counter": false,
+    "penalties": false
   },
 
   "delete_bot_messages": true,
