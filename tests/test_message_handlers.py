@@ -82,6 +82,10 @@ def config():
             "mute_applied": True,
             "kick_applied": True,
             "ban_applied": True
+        },
+        features={
+            "violation_counter": True,
+            "penalties": True
         }
     )
 
