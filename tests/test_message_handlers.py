@@ -61,6 +61,7 @@ def config():
         mute_duration_seconds=300,
         temp_ban_duration_seconds=3600,
         data_retention_days=30,
+        delete_violationg_user_messages=True,
         logging=logging_config,
         violation_rules={
             "no_reply": ViolationRule(enabled=True, count_as_violation=True, violations_before_penalty=1),
