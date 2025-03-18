@@ -244,7 +244,9 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
             else:
                 if delete_msg:
                     # Сначала пытаемся удалить сообщение
-                    await _delete_message_safe(message)
+                    # Проверяем настройку удаления сообщений пользователей при нарушениях
+                    if config.delete_violationg_user_messages:
+                        await _delete_message_safe(message)
                 
                 # Записываем удалённое сообщение и нарушение
                 deleted_msg_id = await record_deleted_message(user_id, user_name, chat_id, text)
@@ -440,7 +442,9 @@ async def process_violation(
         if config.logging.violations:
             logger.debug(f"Правило {violation_type} не считается за нарушение, удаляем сообщение")
         try:
-            await message.delete()
+            # Проверяем настройку удаления сообщений пользователей при нарушениях
+            if config.delete_violationg_user_messages:
+                await message.delete()
         except Exception as e:
             logger.error(f"Ошибка при удалении сообщения: {str(e)}")
         return
@@ -502,9 +506,10 @@ async def apply_penalty(
 
     try:
         # Удаляем сообщение-нарушение
-        await message.delete()
-        if config.logging.penalties:
-            logger.debug(f"Удалено сообщение-нарушение {message.message_id}")
+        if config.delete_violationg_user_messages:
+            await message.delete()
+            if config.logging.penalties:
+                logger.debug(f"Удалено сообщение-нарушение {message.message_id}")
     except Exception as e:
         logger.error(f"Ошибка при удалении сообщения-нарушения: {str(e)}")
 

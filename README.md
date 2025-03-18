@@ -144,6 +144,7 @@
 - `bot_message_lifetime_seconds` - Через сколько удалять сообщения бота
 - `delete_penalty_messages` - Удалять ли сообщения о наказаниях
 - `penalty_message_lifetime_seconds` - Через сколько удалять сообщения о наказаниях
+- `delete_violationg_user_messages` - Удалять ли сообщения пользователей при нарушении правил
 
 ### Настройки уведомлений:
 

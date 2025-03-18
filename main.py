@@ -56,6 +56,7 @@ def setup_logging(config: Config):
         logger.info(f"reply_cooldown_seconds: {config.reply_cooldown_seconds}")
         logger.info(f"mute_duration_seconds: {config.mute_duration_seconds}")
         logger.info(f"temp_ban_duration_seconds: {config.temp_ban_duration_seconds}")
+        logger.info(f"delete_violationg_user_messages: {config.delete_violationg_user_messages}")
 
 # Добавляем middleware для конфигурации
 class ConfigMiddleware:
