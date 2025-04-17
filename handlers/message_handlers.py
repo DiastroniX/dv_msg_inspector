@@ -284,7 +284,9 @@ async def apply_penalties_if_needed(
     deleted_msg_id: int = None
 ):
     # Проверяем, включены ли наказания
-    if not config.features.get("penalties", True):
+    if not config.features.get("penalties", False):
+        if config.logging.violations:
+            logger.debug("Система наказаний отключена")
         return
 
     count_incidents = await get_incidents_count(user_id)
@@ -310,7 +312,7 @@ async def apply_penalties_if_needed(
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=False)
 
     # Проверяем, включены ли наказания
-    if not config.features.get("penalties", True):
+    if not config.features.get("penalties", False):
         return
 
     # Определяем наказание на основе количества нарушений
@@ -468,7 +470,7 @@ async def process_violation(
         logger.info(f"Добавлено нарушение {violation.id} для пользователя {message.from_user.id}")
 
     # Проверяем, включены ли наказания
-    if not config.features.get("penalties", True):
+    if not config.features.get("penalties", False):
         if config.logging.violations:
             logger.debug("Система наказаний отключена")
         return
