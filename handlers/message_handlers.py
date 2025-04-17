@@ -263,12 +263,19 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
                     notification_text = TEXTS["self_reply"].format(name=user_name, minutes=minutes)
 
                 if notification_text:
-                    sent_msg = await bot.send_message(chat_id, notification_text, parse_mode="HTML")
+                    # Если наказания отключены, отвечаем на нарушающее сообщение
+                    if not config.features.get("penalties", False):
+                        # Отправляем ответ на нарушающее сообщение
+                        sent_msg = await message.reply(notification_text, parse_mode="HTML")
+                    else:
+                        # Отправляем обычное сообщение
+                        sent_msg = await bot.send_message(chat_id, notification_text, parse_mode="HTML")
+                    
                     if sent_msg and config.delete_bot_messages:
                         await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=False)
                 
                 # Проверяем необходимость применения санкций
-                await apply_penalties_if_needed(user_id, user_name, chat_id, config, violation_type, text, bot, deleted_msg_id)
+                await apply_penalties_if_needed(user_id, user_name, chat_id, config, violation_type, text, bot, deleted_msg_id, message)
 
         except Exception as e:
             logging.error(f"Error processing violation for user {user_name}: {str(e)}", exc_info=True)
@@ -281,7 +288,8 @@ async def apply_penalties_if_needed(
     violation_type: str,
     msg_text: str,
     bot: Bot,
-    deleted_msg_id: int = None
+    deleted_msg_id: int = None,
+    original_message: Message = None
 ):
     # Проверяем, включены ли наказания
     if not config.features.get("penalties", False):
