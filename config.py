@@ -140,7 +140,7 @@ class Config:
             delete_penalty_messages=data.get("delete_penalty_messages", False),
             penalty_message_lifetime_seconds=data.get("penalty_message_lifetime_seconds", 300),
             bot_message_delay_seconds=data.get("bot_message_delay_seconds", 2),
-            delete_violationg_user_messages=data.get("delete_violationg_user_messages", True),
+            delete_violationg_user_messages=data.get("delete_violationg_user_messages", False),
             
             data_retention_days=data.get("data_retention_days", 360),
             
