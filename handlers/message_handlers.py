@@ -246,21 +246,38 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
                     # Сначала пытаемся удалить сообщение
                     # Проверяем настройку удаления сообщений пользователей при нарушениях
                     if config.delete_violationg_user_messages:
-                        await _delete_message_safe(message)
+                        # Проверяем, задан ли таймер для удаления
+                        if config.violationg_user_messages_lifetime_seconds > 0:
+                            # Планируем удаление сообщения через указанное время
+                            asyncio.create_task(schedule_delete(
+                                bot, message.chat.id, message.message_id,
+                                config.violationg_user_messages_lifetime_seconds
+                            ))
+                            if config.logging.message_deletion:
+                                logger.info(f"Запланировано удаление сообщения {message.message_id} через {config.violationg_user_messages_lifetime_seconds} секунд")
+                        else:
+                            # Если таймер не задан, удаляем сообщение немедленно
+                            await _delete_message_safe(message)
                 
                 # Записываем удалённое сообщение и нарушение
                 deleted_msg_id = await record_deleted_message(user_id, user_name, chat_id, text)
                 await record_violation(user_id, user_name, chat_id, violation_type, config)
 
-                # Отправляем уведомление о нарушении
+                # Формируем уведомление о нарушении
                 notification_text = None
+                delete_warning = ""
+                
+                # Добавляем предупреждение об удалении, если включено отложенное удаление
+                if config.delete_violationg_user_messages and config.violationg_user_messages_lifetime_seconds > 0:
+                    delete_warning = TEXTS["delete_warning"].format(seconds=config.violationg_user_messages_lifetime_seconds)
+                
                 if violation_type == "no_reply":
-                    notification_text = TEXTS["no_reply"].format(name=user_name)
+                    notification_text = TEXTS["no_reply"].format(name=user_name, delete_warning=delete_warning)
                 elif violation_type == "double_reply":
-                    notification_text = TEXTS["double_reply"].format(name=user_name)
+                    notification_text = TEXTS["double_reply"].format(name=user_name, delete_warning=delete_warning)
                 elif violation_type == "self_reply":
                     minutes = max(1, (config.reply_cooldown_seconds + 59) // 60)  # округление вверх
-                    notification_text = TEXTS["self_reply"].format(name=user_name, minutes=minutes)
+                    notification_text = TEXTS["self_reply"].format(name=user_name, minutes=minutes, delete_warning=delete_warning)
 
                 if notification_text:
                     # Если наказания отключены, отвечаем на нарушающее сообщение
@@ -306,13 +323,18 @@ async def apply_penalties_if_needed(
         # Добавляем задержку перед отправкой сообщения
         await asyncio.sleep(config.bot_message_delay_seconds)
         
+        # Формируем предупреждение об удалении, если оно включено
+        delete_warning = ""
+        if config.delete_violationg_user_messages and config.violationg_user_messages_lifetime_seconds > 0 and original_message:
+            delete_warning = TEXTS["delete_warning"].format(seconds=config.violationg_user_messages_lifetime_seconds)
+            
         if violation_type == "no_reply":
-            notification_text = TEXTS["no_reply"].format(name=user_name)
+            notification_text = TEXTS["no_reply"].format(name=user_name, delete_warning=delete_warning)
         elif violation_type == "double_reply":
-            notification_text = TEXTS["double_reply"].format(name=user_name)
+            notification_text = TEXTS["double_reply"].format(name=user_name, delete_warning=delete_warning)
         elif violation_type == "self_reply":
             minutes = max(1, (config.reply_cooldown_seconds + 59) // 60)
-            notification_text = TEXTS["self_reply"].format(name=user_name, minutes=minutes)
+            notification_text = TEXTS["self_reply"].format(name=user_name, minutes=minutes, delete_warning=delete_warning)
             
         if notification_text:
             sent_msg = await bot.send_message(group_id, notification_text, parse_mode="HTML")
@@ -454,7 +476,18 @@ async def process_violation(
         try:
             # Проверяем настройку удаления сообщений пользователей при нарушениях
             if config.delete_violationg_user_messages:
-                await message.delete()
+                # Проверяем, задан ли таймер для удаления
+                if config.violationg_user_messages_lifetime_seconds > 0:
+                    # Планируем удаление сообщения через указанное время
+                    asyncio.create_task(schedule_delete(
+                        bot, message.chat.id, message.message_id,
+                        config.violationg_user_messages_lifetime_seconds
+                    ))
+                    if config.logging.violations:
+                        logger.debug(f"Запланировано удаление сообщения {message.message_id} через {config.violationg_user_messages_lifetime_seconds} секунд")
+                else:
+                    # Если таймер не задан, удаляем сообщение немедленно
+                    await message.delete()
         except Exception as e:
             logger.error(f"Ошибка при удалении сообщения: {str(e)}")
         return
@@ -517,9 +550,20 @@ async def apply_penalty(
     try:
         # Удаляем сообщение-нарушение
         if config.delete_violationg_user_messages:
-            await message.delete()
-            if config.logging.penalties:
-                logger.debug(f"Удалено сообщение-нарушение {message.message_id}")
+            # Проверяем, задан ли таймер для удаления
+            if config.violationg_user_messages_lifetime_seconds > 0:
+                # Планируем удаление сообщения через указанное время
+                asyncio.create_task(schedule_delete(
+                    bot, message.chat.id, message.message_id,
+                    config.violationg_user_messages_lifetime_seconds
+                ))
+                if config.logging.penalties:
+                    logger.debug(f"Запланировано удаление сообщения-нарушения {message.message_id} через {config.violationg_user_messages_lifetime_seconds} секунд")
+            else:
+                # Если таймер не задан, удаляем сообщение немедленно
+                await message.delete()
+                if config.logging.penalties:
+                    logger.debug(f"Удалено сообщение-нарушение {message.message_id}")
     except Exception as e:
         logger.error(f"Ошибка при удалении сообщения-нарушения: {str(e)}")
 
