@@ -284,12 +284,9 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
                     if not config.features.get("penalties", False):
                         # Отправляем ответ на нарушающее сообщение
                         sent_msg = await message.reply(notification_text, parse_mode="HTML")
-                    else:
-                        # Отправляем обычное сообщение
-                        sent_msg = await bot.send_message(chat_id, notification_text, parse_mode="HTML")
-                    
-                    if sent_msg and config.delete_bot_messages:
-                        await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=False)
+                        if sent_msg and config.delete_bot_messages:
+                            await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=False)
+                    # Если наказания включены, уведомление будет отправлено в функции apply_penalties_if_needed
                 
                 # Проверяем необходимость применения санкций
                 await apply_penalties_if_needed(user_id, user_name, chat_id, config, violation_type, text, bot, deleted_msg_id, message)
