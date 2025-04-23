@@ -377,7 +377,11 @@ async def apply_penalties_if_needed(
                 next_penalty_description=next_penalty,
                 violations_until_next=violations_until_next
             )
-            sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
+            sent_msg = None
+            if original_message:
+                sent_msg = await original_message.reply(txt, parse_mode="HTML")
+            else:
+                sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
             if sent_msg and config.delete_penalty_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
 
@@ -404,7 +408,11 @@ async def apply_penalties_if_needed(
                 minutes=minutes,
                 datetime=msk_time
             )
-            sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
+            sent_msg = None
+            if original_message:
+                sent_msg = await original_message.reply(txt, parse_mode="HTML")
+            else:
+                sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
             if sent_msg and config.delete_penalty_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
 
@@ -417,7 +425,11 @@ async def apply_penalties_if_needed(
 
         if config.notifications.get("kick_applied", True):
             txt = TEXTS["kick_applied"].format(name=user_name, violations_count=count_incidents)
-            sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
+            sent_msg = None
+            if original_message:
+                sent_msg = await original_message.reply(txt, parse_mode="HTML")
+            else:
+                sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
             if sent_msg and config.delete_penalty_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
 
@@ -439,7 +451,11 @@ async def apply_penalties_if_needed(
                 minutes=minutes,
                 date_str=msk_time
             )
-            sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
+            sent_msg = None
+            if original_message:
+                sent_msg = await original_message.reply(txt, parse_mode="HTML")
+            else:
+                sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
             if sent_msg and config.delete_penalty_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
 
@@ -451,7 +467,11 @@ async def apply_penalties_if_needed(
 
         if config.notifications.get("ban_applied", True):
             txt = TEXTS["ban_applied"].format(name=user_name, violations_count=count_incidents)
-            sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
+            sent_msg = None
+            if original_message:
+                sent_msg = await original_message.reply(txt, parse_mode="HTML")
+            else:
+                sent_msg = await bot.send_message(group_id, txt, parse_mode="HTML")
             if sent_msg and config.delete_penalty_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=True)
 
