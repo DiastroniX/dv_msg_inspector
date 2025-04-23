@@ -334,7 +334,14 @@ async def apply_penalties_if_needed(
             notification_text = TEXTS["self_reply"].format(name=user_name, minutes=minutes, delete_warning=delete_warning)
             
         if notification_text:
-            sent_msg = await bot.send_message(group_id, notification_text, parse_mode="HTML")
+            sent_msg = None
+            # Используем reply, если доступно оригинальное сообщение
+            if original_message:
+                sent_msg = await original_message.reply(notification_text, parse_mode="HTML")
+            else:
+                # Запасной вариант, если нет доступа к оригинальному сообщению
+                sent_msg = await bot.send_message(group_id, notification_text, parse_mode="HTML")
+                
             if sent_msg and config.delete_bot_messages:
                 await safe_delete_bot_message(bot, sent_msg, config, is_penalty_message=False)
 
