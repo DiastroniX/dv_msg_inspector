@@ -154,6 +154,38 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
     if message.message_auto_delete_timer_changed or message.pinned_message:
         return
 
+    # Проверяем, содержит ли сообщение несколько медиафайлов (альбом с изображениями)
+    # Сообщения с альбомами генерируют несколько событий, но должны считаться как одно сообщение
+    if message.media_group_id:
+        # Проверяем, обработали ли мы уже сообщение из этой группы медиа
+        group_id = message.media_group_id
+        user_id = user.id
+        now_ts = time.time()
+        
+        # Используем временный кэш для отслеживания групп медиафайлов
+        if not hasattr(process_group_message, 'media_groups_cache'):
+            process_group_message.media_groups_cache = {}
+            
+        # Если эта группа медиа уже обрабатывалась за последние 10 секунд, пропускаем
+        if group_id in process_group_message.media_groups_cache:
+            last_ts = process_group_message.media_groups_cache[group_id]
+            if now_ts - last_ts < 10:  # 10 секунд - время жизни записи в кэше медиагрупп
+                return  # Пропускаем дубликаты медиагруппы
+                
+        # Сохраняем время обработки медиагруппы
+        process_group_message.media_groups_cache[group_id] = now_ts
+        
+        # Очистка старых записей каждые 100 запросов
+        if hasattr(process_group_message, 'cleanup_counter'):
+            process_group_message.cleanup_counter += 1
+            if process_group_message.cleanup_counter > 100:
+                for old_group_id in list(process_group_message.media_groups_cache.keys()):
+                    if now_ts - process_group_message.media_groups_cache[old_group_id] > 60:
+                        del process_group_message.media_groups_cache[old_group_id]
+                process_group_message.cleanup_counter = 0
+        else:
+            process_group_message.cleanup_counter = 1
+
     user_id = user.id
     user_name = f"@{user.username}" if user.username else user.full_name
 
