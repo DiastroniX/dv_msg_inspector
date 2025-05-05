@@ -37,25 +37,38 @@ message_router = Router(name="message_router")
 # user_id -> List[Tuple[message_id, reply_to_message_id, timestamp]]
 user_messages: Dict[int, List[Tuple[int, Optional[int], float]]] = defaultdict(list)
 
+# Кэш для отслеживания всех сообщений в группе (для проверки сообщений между сообщениями пользователя)
+# chat_id -> List[Tuple[message_id, user_id, timestamp]]
+chat_messages: Dict[int, List[Tuple[int, int, float]]] = defaultdict(list)
+
 # Время жизни записи в кэше (60 минут)
 CACHE_TTL = 3600
 
 logger = logging.getLogger(__name__)
 
 async def cleanup_old_cache_entries():
-    """Периодически очищает старые записи из кэша user_messages"""
+    """Периодически очищает старые записи из кэша user_messages и chat_messages"""
     while True:
         try:
             current_time = time.time()
+            # Очистка кэша пользовательских сообщений
             for user_id in list(user_messages.keys()):
-                # Удаляем сообщения старше CACHE_TTL
                 user_messages[user_id] = [
                     msg for msg in user_messages[user_id]
                     if current_time - msg[2] <= CACHE_TTL
                 ]
-                # Если список пуст, удаляем запись пользователя
                 if not user_messages[user_id]:
                     del user_messages[user_id]
+            
+            # Очистка кэша сообщений чата
+            for chat_id in list(chat_messages.keys()):
+                chat_messages[chat_id] = [
+                    msg for msg in chat_messages[chat_id]
+                    if current_time - msg[2] <= CACHE_TTL
+                ]
+                if not chat_messages[chat_id]:
+                    del chat_messages[chat_id]
+                    
             await asyncio.sleep(300)  # Проверяем каждые 5 минут
         except Exception as e:
             logging.error(f"Error in cache cleanup: {str(e)}", exc_info=True)
@@ -108,6 +121,31 @@ async def _delete_message_safe(message: Message):
         await message.delete()
     except Exception:
         pass
+
+def has_other_messages_between(chat_id: int, user_id: int, prev_ts: float, current_ts: float) -> bool:
+    """
+    Проверяет, были ли сообщения от других пользователей между двумя сообщениями текущего пользователя
+    
+    Args:
+        chat_id: ID чата
+        user_id: ID пользователя, чьи сообщения проверяются
+        prev_ts: Временная метка предыдущего сообщения пользователя
+        current_ts: Временная метка текущего сообщения пользователя
+        
+    Returns:
+        True, если между сообщениями были сообщения других пользователей
+    """
+    if chat_id not in chat_messages:
+        return False
+        
+    # Фильтруем сообщения в указанном временном диапазоне
+    messages_between = [
+        msg for msg in chat_messages[chat_id]
+        if prev_ts < msg[2] < current_ts  # сообщение находится между предыдущим и текущим
+        and msg[1] != user_id  # сообщение от другого пользователя
+    ]
+    
+    return len(messages_between) > 0
 
 @message_router.message(F.chat.type.in_({"group", "supergroup"}))
 async def process_group_message(message: Message, bot: Bot, event_from_user: User = None, **data):
@@ -188,6 +226,13 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
 
     user_id = user.id
     user_name = f"@{user.username}" if user.username else user.full_name
+    now_ts = time.time()
+    
+    # Добавляем сообщение в общий кэш сообщений чата
+    chat_messages[chat_id].append((message.message_id, user_id, now_ts))
+    
+    # Сортируем сообщения по времени
+    chat_messages[chat_id].sort(key=lambda x: x[2])
 
     # Проверяем, является ли пользователь администратором
     is_admin_user = is_admin(user_id, config)
@@ -197,7 +242,6 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
 
     text = message.text or message.caption or ""
     text_len = len(text)
-    now_ts = time.time()
 
     # Если сообщение длинное — пропускаем проверки
     if text_len >= config.message_length_limit:
@@ -241,28 +285,8 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
         else:
             # No-reply: сообщение без реплая после предыдущего без реплая
             if not prev_reply_id and time_violation:
-                # Проверяем, было ли между сообщениями пользователя сообщение от другого пользователя
-                # Если сообщений от других пользователей не было - это монолог и не нарушение
-                
-                # По умолчанию считаем, что это обычный монолог (не нарушение)
-                is_violation = False
-                
-                # Проверяем, были ли сообщения от других пользователей между предыдущим и текущим сообщением
-                for other_user_id, msgs in user_messages.items():
-                    if other_user_id == user_id:
-                        continue  # Пропускаем сообщения текущего пользователя
-                    
-                    # Ищем сообщения других пользователей между предыдущим и текущим сообщением пользователя
-                    for msg_id, reply_id, msg_ts in msgs:
-                        if prev_ts < msg_ts < now_ts:
-                            # Нашли сообщение другого пользователя - значит нарушение
-                            is_violation = True
-                            break
-                    if is_violation:
-                        break
-                
-                # Только если найдено сообщение другого пользователя, считаем нарушением
-                if is_violation:
+                # Проверяем, были ли сообщения других пользователей между предыдущим и текущим
+                if not has_other_messages_between(chat_id, user_id, prev_ts, now_ts):
                     violation_type = "no_reply"
                     delete_msg = not is_admin_user
 
