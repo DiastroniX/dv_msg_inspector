@@ -241,8 +241,30 @@ async def process_group_message(message: Message, bot: Bot, event_from_user: Use
         else:
             # No-reply: сообщение без реплая после предыдущего без реплая
             if not prev_reply_id and time_violation:
-                violation_type = "no_reply"
-                delete_msg = not is_admin_user
+                # Проверяем, было ли между сообщениями пользователя сообщение от другого пользователя
+                # Если сообщений от других пользователей не было - это монолог и не нарушение
+                
+                # По умолчанию считаем, что это обычный монолог (не нарушение)
+                is_violation = False
+                
+                # Проверяем, были ли сообщения от других пользователей между предыдущим и текущим сообщением
+                for other_user_id, msgs in user_messages.items():
+                    if other_user_id == user_id:
+                        continue  # Пропускаем сообщения текущего пользователя
+                    
+                    # Ищем сообщения других пользователей между предыдущим и текущим сообщением пользователя
+                    for msg_id, reply_id, msg_ts in msgs:
+                        if prev_ts < msg_ts < now_ts:
+                            # Нашли сообщение другого пользователя - значит нарушение
+                            is_violation = True
+                            break
+                    if is_violation:
+                        break
+                
+                # Только если найдено сообщение другого пользователя, считаем нарушением
+                if is_violation:
+                    violation_type = "no_reply"
+                    delete_msg = not is_admin_user
 
     if violation_type:
         try:
